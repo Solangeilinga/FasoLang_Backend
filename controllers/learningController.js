@@ -478,6 +478,9 @@ export const getLessonsByCourse = async (req, res) => {
 // ===============================
 // getLessonById
 // ===============================
+// ===============================
+// getLessonById - VERSION CORRIGÉE AVEC IMAGES
+// ===============================
 export const getLessonById = async (req, res) => {
   try {
     const { lessonId } = req.params;
@@ -559,6 +562,7 @@ export const getLessonById = async (req, res) => {
       console.log('📋 Langues disponibles:', contents.map(c => c.language?.code));
     }
 
+    // ✅ CONSTRUCTION DE LA RÉPONSE AVEC IMAGES
     const response = {
       success: true,
       data: {
@@ -575,6 +579,7 @@ export const getLessonById = async (req, res) => {
         french: {
           content: frenchContent?.content || '',
           audio: frenchContent?.audioUrl || null,
+          imageUrl: frenchContent?.imageUrl || null,  // ✅ AJOUTÉ
           language: {
             id: frenchContent?.language?.id || 1,
             code: 'fr',
@@ -584,6 +589,7 @@ export const getLessonById = async (req, res) => {
         local: {
           content: localContent?.content || frenchContent?.content || '',
           audio: localContent?.audioUrl || frenchContent?.audioUrl || null,
+          imageUrl: localContent?.imageUrl || null,   // ✅ AJOUTÉ
           language: {
             id: localContent?.language?.id || 2,
             code: localLanguageCode,
@@ -596,7 +602,11 @@ export const getLessonById = async (req, res) => {
       }
     };
 
-    console.log('✅ Réponse envoyée');
+    console.log('✅ Réponse envoyée avec images:', {
+      frenchImage: response.data.french.imageUrl ? 'présente' : 'absente',
+      localImage: response.data.local.imageUrl ? 'présente' : 'absente'
+    });
+    
     res.status(200).json(response);
   } catch (error) {
     console.error("💥 Erreur getLessonById:", error);

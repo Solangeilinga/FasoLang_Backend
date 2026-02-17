@@ -6,6 +6,7 @@ import sequelize from "./config/db.js";
 import cookieParser from "cookie-parser";
 
 // Import des routes
+import uploadRoutes from "./routes/upload.js";
 import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import exerciseRoutes from './routes/exerciseRoutes.js';
@@ -49,6 +50,9 @@ app.use(cookieParser());
 app.get("/", (req, res) => {
     res.send("🌍 API Langues du Faso — Backend opérationnel !");
 });
+
+
+app.use("/api/upload", uploadRoutes);
 
 // --- Routes principales ---
 app.use("/api/courses", coursesRoutes);

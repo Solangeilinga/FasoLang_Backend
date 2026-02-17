@@ -479,19 +479,13 @@ export const getLessonsByCourse = async (req, res) => {
 // getLessonById
 // ===============================
 // ===============================
-// getLessonById - VERSION CORRIGÉE AVEC IMAGES
+// getLessonById - VERSION AVEC AUDIOS ET IMAGES
 // ===============================
 export const getLessonById = async (req, res) => {
   try {
     const { lessonId } = req.params;
     const { localLanguageCode = 'moore' } = req.query;
     const userId = req.user?.id;
-
-    console.log('🔍 getLessonById appelé:', {
-      lessonId,
-      localLanguageCode,
-      userId
-    });
 
     const id = parseInt(lessonId);
     if (isNaN(id)) {
@@ -501,9 +495,7 @@ export const getLessonById = async (req, res) => {
       });
     }
 
-    // ✅ Récupérer la leçon
     const lesson = await Lesson.findByPk(id);
-
     if (!lesson) {
       return res.status(404).json({ 
         success: false, 
@@ -511,13 +503,7 @@ export const getLessonById = async (req, res) => {
       });
     }
 
-    console.log('✅ Leçon trouvée:', {
-      id: lesson.id,
-      title: lesson.title,
-      courseId: lesson.courseId
-    });
-
-    // ✅ Récupérer les contenus multilingues
+    // ✅ Récupérer les contenus multilingues AVEC TOUS LES CHAMPS
     const contents = await LessonContent.findAll({
       where: { lessonId: id },
       include: [{
@@ -527,12 +513,19 @@ export const getLessonById = async (req, res) => {
       }]
     });
 
-    console.log('📚 Contenus trouvés:', contents.length);
+    // ✅ Log détaillé pour voir ce qui est récupéré
+    console.log('📊 DÉTAIL DES CONTENUS:');
     contents.forEach(c => {
-      console.log(`  - ${c.language?.code}: "${c.content?.substring(0, 50)}..."`);
+      console.log({
+        languageCode: c.language?.code,
+        content: c.content?.substring(0, 30),
+        audioUrl: c.audioUrl,  // Vérifiez ce champ
+        imageUrl: c.imageUrl,
+        hasAudio: !!c.audioUrl,
+        hasImage: !!c.imageUrl
+      });
     });
 
-    // ✅ Récupérer la progression
     let progress = null;
     if (userId) {
       progress = await UserProgress.findOne({ 
@@ -544,25 +537,12 @@ export const getLessonById = async (req, res) => {
       });
     }
 
-    // ✅ Trouver les contenus français et local
     const frenchContent = contents.find(c => c.language?.code === 'fr');
     const localContent = contents.find(c => c.language?.code === localLanguageCode);
 
-    console.log('🎯 Contenu français:', frenchContent ? '✅' : '❌');
-    console.log('🎯 Contenu local (' + localLanguageCode + '):', localContent ? '✅' : '❌');
+    // ✅ Construction de l'URL complète pour les fichiers audio
+    const baseUrl = process.env.APP_URL || 'http://localhost:3000'; // À ajuster selon votre config
 
-    if (localContent) {
-      console.log('✅ Contenu local trouvé:', {
-        languageCode: localContent.language?.code,
-        languageName: localContent.language?.name,
-        contentPreview: localContent.content?.substring(0, 50)
-      });
-    } else {
-      console.warn('⚠️ Aucun contenu trouvé pour:', localLanguageCode);
-      console.log('📋 Langues disponibles:', contents.map(c => c.language?.code));
-    }
-
-    // ✅ CONSTRUCTION DE LA RÉPONSE AVEC IMAGES
     const response = {
       success: true,
       data: {
@@ -578,8 +558,13 @@ export const getLessonById = async (req, res) => {
         } : null,
         french: {
           content: frenchContent?.content || '',
-          audio: frenchContent?.audioUrl || null,
-          imageUrl: frenchContent?.imageUrl || null,  // ✅ AJOUTÉ
+          // ✅ Construire l'URL complète si audioUrl existe
+          audio: frenchContent?.audioUrl 
+            ? (frenchContent.audioUrl.startsWith('http') 
+                ? frenchContent.audioUrl 
+                : `${baseUrl}${frenchContent.audioUrl}`)
+            : null,
+          imageUrl: frenchContent?.imageUrl || null,
           language: {
             id: frenchContent?.language?.id || 1,
             code: 'fr',
@@ -588,8 +573,17 @@ export const getLessonById = async (req, res) => {
         },
         local: {
           content: localContent?.content || frenchContent?.content || '',
-          audio: localContent?.audioUrl || frenchContent?.audioUrl || null,
-          imageUrl: localContent?.imageUrl || null,   // ✅ AJOUTÉ
+          // ✅ Construire l'URL complète si audioUrl existe
+          audio: localContent?.audioUrl 
+            ? (localContent.audioUrl.startsWith('http') 
+                ? localContent.audioUrl 
+                : `${baseUrl}${localContent.audioUrl}`)
+            : frenchContent?.audioUrl 
+              ? (frenchContent.audioUrl.startsWith('http') 
+                  ? frenchContent.audioUrl 
+                  : `${baseUrl}${frenchContent.audioUrl}`)
+              : null,
+          imageUrl: localContent?.imageUrl || null,
           language: {
             id: localContent?.language?.id || 2,
             code: localLanguageCode,
@@ -602,11 +596,13 @@ export const getLessonById = async (req, res) => {
       }
     };
 
-    console.log('✅ Réponse envoyée avec images:', {
-      frenchImage: response.data.french.imageUrl ? 'présente' : 'absente',
-      localImage: response.data.local.imageUrl ? 'présente' : 'absente'
+    console.log('✅ Réponse finale:', {
+      frenchAudio: response.data.french.audio,
+      frenchImage: response.data.french.imageUrl,
+      localAudio: response.data.local.audio,
+      localImage: response.data.local.imageUrl
     });
-    
+
     res.status(200).json(response);
   } catch (error) {
     console.error("💥 Erreur getLessonById:", error);

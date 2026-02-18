@@ -4,9 +4,9 @@ import dotenv from "dotenv";
 dotenv.config();
 
 // Vérifier que les variables d'environnement essentielles sont présentes
-const { EMAIL_USER, EMAIL_PASSWORD, FRONTEND_URL } = process.env;
+const { EMAIL_USER, EMAIL_PASSWORD } = process.env;
 
-if (!EMAIL_USER || !EMAIL_PASSWORD || !FRONTEND_URL) {
+if (!EMAIL_USER || !EMAIL_PASSWORD ) {
   throw new Error(
     "Variables d'environnement manquantes : EMAIL_USER, EMAIL_PASSWORD ou FRONTEND_URL"
   );

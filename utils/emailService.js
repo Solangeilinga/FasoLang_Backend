@@ -1,144 +1,216 @@
-// services/emailService.js
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 
 dotenv.config();
 
-// Vérifier que les variables d'environnement essentielles sont présentes
-const { EMAIL_USER, EMAIL_PASSWORD } = process.env;
+const { EMAIL_USER, EMAIL_PASSWORD, EMAIL_HOST, EMAIL_PORT } = process.env;
 
 if (!EMAIL_USER || !EMAIL_PASSWORD) {
-  console.warn("⚠️ Variables d'email non configurées");
+  console.warn("⚠️ Variables EMAIL_USER ou EMAIL_PASSWORD non configurées");
 }
 
-// ✅ CONFIGURATION CORRIGÉE - avec port 587 et IPv4 forcé
+// ✅ Configuration optimisée pour Railway
 const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 587,                    // Port TLS (plus fiable que 465 sur Railway)
-  secure: false,                 // false pour port 587
+  host: EMAIL_HOST || "smtp.gmail.com",
+  port: parseInt(EMAIL_PORT || "587"),
+  secure: false, // true pour 465, false pour 587
   auth: {
     user: EMAIL_USER,
     pass: EMAIL_PASSWORD,
   },
-  family: 4,                     // 🔥 FORCE IPv4 (résout l'erreur ENETUNREACH)
-  connectionTimeout: 30000,       // 30 secondes timeout connexion
-  greetingTimeout: 30000,         // 30 secondes timeout greeting
-  socketTimeout: 60000,           // 60 secondes timeout socket
+  // ✅ Timeouts augmentés pour Railway
+  connectionTimeout: 60000,   // 60 secondes
+  greetingTimeout: 30000,     // 30 secondes
+  socketTimeout: 60000,       // 60 secondes
+  // ✅ Pool de connexions
+  pool: true,
+  maxConnections: 5,
+  maxMessages: 100,
+  // ✅ Options SSL/TLS
   tls: {
-    rejectUnauthorized: false,    // Évite certains problèmes de certificat
-    ciphers: 'SSLv3'              // Compatibilité
+    rejectUnauthorized: false,
   },
-  debug: process.env.NODE_ENV === 'development' // Logs détaillés en dev
 });
 
-// ✅ FONCTION PRINCIPALE - Envoi du code à 4 chiffres
-export const sendPasswordResetEmail = async (email, resetCode) => {
-  console.log(`📧 Début envoi email pour ${email} avec code: ${resetCode}`);
-  
-  // Validation des entrées
-  if (!email || !resetCode) {
-    throw new Error("Email et code requis");
+// ✅ Vérification au démarrage
+transporter.verify((error, success) => {
+  if (error) {
+    console.error("❌ Erreur configuration email:", error.message);
+  } else {
+    console.log("✅ Serveur email prêt");
   }
+});
 
-  try {
-    const mailOptions = {
-      from: `"Langues du Faso" <${EMAIL_USER}>`,
-      to: email,
-      subject: "🔐 Code de réinitialisation - Langues du Faso",
-      html: `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        </head>
-        <body style="margin:0; padding:0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
-          <div style="max-width: 600px; margin: 20px auto; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-            
-            <!-- En-tête -->
-            <div style="background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%); padding: 30px; text-align: center;">
-              <h1 style="color: white; margin: 0; font-size: 24px;">Langues du Faso</h1>
-            </div>
-            
-            <!-- Corps -->
-            <div style="padding: 40px 30px;">
-              <h2 style="color: #1F2937; margin-bottom: 20px;">Réinitialisation de mot de passe</h2>
-              
-              <p style="color: #4B5563; line-height: 1.6; margin-bottom: 30px;">
-                Bonjour,<br><br>
-                Vous avez demandé la réinitialisation de votre mot de passe. 
-                Voici votre code de vérification à 4 chiffres :
-              </p>
-              
-              <!-- Code à 4 chiffres -->
-              <div style="text-align: center; margin: 40px 0;">
-                <div style="background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%); 
-                          padding: 20px 40px; 
-                          border-radius: 12px; 
-                          display: inline-block;
-                          box-shadow: 0 4px 6px rgba(37, 99, 235, 0.3);">
-                  <span style="font-size: 48px; 
-                             letter-spacing: 8px; 
-                             font-weight: bold; 
-                             color: white;">
-                    ${resetCode}
-                  </span>
-                </div>
-              </div>
-              
-              <!-- Infos expiration -->
-              <div style="background-color: #FEF3C7; padding: 15px; border-radius: 8px; margin: 30px 0;">
-                <p style="color: #92400E; margin: 0; font-weight: 500;">
-                  ⏰ Ce code expirera dans <strong>15 minutes</strong>
-                </p>
-              </div>
-              
-              <!-- Message sécurité -->
-              <p style="color: #6B7280; font-size: 14px; line-height: 1.6; border-left: 3px solid #3B82F6; padding-left: 15px;">
-                Si vous n'avez pas demandé cette réinitialisation, 
-                ignorez cet email et votre mot de passe restera inchangé.
-              </p>
-            </div>
-            
-            <!-- Pied de page -->
-            <div style="background-color: #F9FAFB; padding: 20px; text-align: center; border-top: 1px solid #E5E7EB;">
-              <p style="color: #6B7280; font-size: 14px; margin: 0;">
-                Cordialement,<br>
-                <strong style="color: #3B82F6;">L'équipe Langues du Faso</strong>
-              </p>
-            </div>
+/**
+ * ✅ Envoyer email avec RETRY automatique
+ */
+async function sendEmailWithRetry(mailOptions, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`📧 Tentative ${attempt}/${maxRetries}...`);
+      
+      const info = await transporter.sendMail(mailOptions);
+      
+      console.log(`✅ Email envoyé (tentative ${attempt}):`, info.messageId);
+      return { success: true, messageId: info.messageId };
+
+    } catch (error) {
+      console.error(`❌ Tentative ${attempt}/${maxRetries} échouée:`, {
+        message: error.message,
+        code: error.code,
+        command: error.command,
+      });
+
+      // Si dernière tentative, throw
+      if (attempt === maxRetries) {
+        throw new Error(
+          `Échec après ${maxRetries} tentatives: ${error.message}`
+        );
+      }
+
+      // Backoff exponentiel (1s, 2s, 4s, max 10s)
+      const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
+      console.log(`⏳ Retry dans ${delay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+}
+
+/**
+ * ✅ Template HTML pour code de réinitialisation
+ */
+function getResetPasswordTemplate(resetCode) {
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body { 
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+          line-height: 1.6; 
+          color: #333; 
+          margin: 0;
+          padding: 0;
+          background: #f5f5f5;
+        }
+        .container { 
+          max-width: 600px; 
+          margin: 20px auto; 
+          background: white;
+          border-radius: 12px;
+          overflow: hidden;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .header { 
+          background: linear-gradient(135deg, #D2691E 0%, #A0522D 100%); 
+          color: white; 
+          padding: 40px 30px; 
+          text-align: center;
+        }
+        .header h1 {
+          margin: 0;
+          font-size: 28px;
+          font-weight: 700;
+        }
+        .header p {
+          margin: 8px 0 0;
+          opacity: 0.95;
+          font-size: 16px;
+        }
+        .content { 
+          padding: 40px 30px; 
+        }
+        .code-box { 
+          background: linear-gradient(135deg, #FFF5E6 0%, #FFEFD5 100%);
+          border: 3px solid #D2691E; 
+          border-radius: 12px; 
+          padding: 30px; 
+          text-align: center; 
+          margin: 30px 0;
+        }
+        .code { 
+          font-size: 48px; 
+          font-weight: 800; 
+          color: #D2691E; 
+          letter-spacing: 12px;
+          font-family: 'Courier New', monospace;
+        }
+        .warning {
+          background: #FEF2F2;
+          border-left: 4px solid #DC2626;
+          padding: 16px;
+          margin: 20px 0;
+          border-radius: 4px;
+        }
+        .warning strong {
+          color: #DC2626;
+        }
+        .footer { 
+          text-align: center; 
+          padding: 30px;
+          background: #f9f9f9;
+          color: #666; 
+          font-size: 13px;
+          border-top: 1px solid #eee;
+        }
+        .footer strong {
+          color: #D2691E;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>FasoLang</h1>
+          <p>Réinitialisation de mot de passe</p>
+        </div>
+        
+        <div class="content">
+          <p>Bonjour,</p>
+          <p>Vous avez demandé à réinitialiser votre mot de passe. Voici votre code de vérification :</p>
+          
+          <div class="code-box">
+            <div class="code">${resetCode}</div>
           </div>
-        </body>
-        </html>
-      `,
-      // Version texte simple pour les clients email qui n'acceptent pas le HTML
-      text: `
-        Réinitialisation de mot de passe - Langues du Faso
+          
+          <div class="warning">
+            <strong>⏱️ Ce code expire dans 15 minutes.</strong>
+          </div>
+          
+          <p>Entrez ce code dans l'application pour continuer.</p>
+          <p>Si vous n'avez pas demandé cette réinitialisation, <strong>ignorez cet email</strong>.</p>
+        </div>
         
-        Bonjour,
-        
-        Vous avez demandé la réinitialisation de votre mot de passe.
-        Voici votre code de vérification : ${resetCode}
-        
-        Ce code expirera dans 15 minutes.
-        
-        Si vous n'avez pas demandé cette réinitialisation, ignorez cet email.
-        
-        Cordialement,
-        L'équipe Langues du Faso
-      `
+        <div class="footer">
+          <p>© ${new Date().getFullYear()} <strong>FasoLang</strong> - Langues du Burkina Faso</p>
+          <p style="margin-top: 8px;">Préserver • Transmettre • Célébrer</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+/**
+ * ✅ Envoyer code de réinitialisation
+ */
+export const sendPasswordResetEmail = async (email, resetCode) => {
+  try {
+    console.log(`📧 Début envoi email pour ${email} avec code: ${resetCode}`);
+
+    const mailOptions = {
+      from: `"FasoLang" <${EMAIL_USER}>`,
+      to: email,
+      subject: "🔐 Code de réinitialisation - FasoLang",
+      html: getResetPasswordTemplate(resetCode),
     };
 
-    // Envoi avec timeout
-    const result = await Promise.race([
-      transporter.sendMail(mailOptions),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("Timeout envoi email (30s)")), 30000)
-      )
-    ]);
-
-    console.log(`✅ Email envoyé avec succès à ${email} - ID: ${result.messageId}`);
-    return { success: true, messageId: result.messageId };
+    const result = await sendEmailWithRetry(mailOptions, 3);
+    console.log(`✅ Email envoyé avec succès à ${email}`);
+    
+    return result;
     
   } catch (error) {
     console.error(`❌ Erreur détaillée pour ${email}:`, {
@@ -146,74 +218,31 @@ export const sendPasswordResetEmail = async (email, resetCode) => {
       code: error.code,
       command: error.command,
       response: error.response,
-      responseCode: error.responseCode
+      responseCode: error.responseCode,
     });
-    
-    // Gestion spécifique des erreurs
-    if (error.code === 'ESOCKET' || error.message.includes('ENETUNREACH')) {
-      throw new Error("Impossible de joindre le serveur Gmail - Vérifiez votre connexion réseau");
-    } else if (error.code === 'EAUTH') {
-      throw new Error("Erreur d'authentification - Vérifiez vos identifiants Gmail");
-    } else if (error.code === 'ETIMEDOUT') {
-      throw new Error("Timeout - Le serveur Gmail ne répond pas");
-    } else {
-      throw new Error(`Erreur envoi email: ${error.message}`);
-    }
+    throw error;
   }
 };
 
-// ✅ FONCTION DE TEST - Vérifie la configuration
+/**
+ * ✅ Vérification configuration SMTP
+ */
 export const verifyEmailConfig = async () => {
-  console.log("🔍 Vérification configuration email...");
-  console.log("- EMAIL_USER:", EMAIL_USER ? "✅ Défini" : "❌ Non défini");
-  console.log("- EMAIL_PASSWORD:", EMAIL_PASSWORD ? "✅ Défini" : "❌ Non défini");
-  
-  if (!EMAIL_USER || !EMAIL_PASSWORD) {
-    console.error("❌ Configuration incomplète");
+  try {
+    await transporter.verify();
+    console.log("✅ Configuration email vérifiée avec succès");
+    return true;
+  } catch (error) {
+    console.error("❌ Erreur configuration email:", {
+      message: error.message,
+      code: error.code,
+    });
     return false;
   }
-
-  try {
-    // Test avec timeout
-    await Promise.race([
-      transporter.verify(),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("Timeout vérification")), 10000)
-      )
-    ]);
-    
-    console.log("✅ Configuration email vérifiée avec succès");
-    console.log("📧 Serveur SMTP Gmail accessible");
-    return true;
-    
-  } catch (error) {
-    console.error("❌ Échec vérification email:", error.message);
-    
-    // Tentative avec config alternative
-    try {
-      console.log("🔄 Tentative avec configuration alternative...");
-      const testTransporter = nodemailer.createTransport({
-        host: "smtp.gmail.com",
-        port: 465,
-        secure: true,
-        auth: { user: EMAIL_USER, pass: EMAIL_PASSWORD },
-        family: 4,
-        connectionTimeout: 10000
-      });
-      
-      await testTransporter.verify();
-      console.log("✅ Configuration alternative fonctionne (port 465)");
-      return true;
-    } catch (altError) {
-      console.error("❌ Toutes les configurations ont échoué");
-      return false;
-    }
-  }
 };
 
-// ✅ EXPORT de la configuration pour usage externe
-export const emailConfig = {
-  isConfigured: !!(EMAIL_USER && EMAIL_PASSWORD),
-  user: EMAIL_USER,
-  provider: 'gmail'
+export default {
+  sendPasswordResetEmail,
+  verifyEmailConfig,
+  transporter,
 };

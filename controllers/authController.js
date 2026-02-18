@@ -214,46 +214,55 @@ export const forgotPassword = async (req, res) => {
     // 1. Vérifier utilisateur
     const user = await User.findOne({ where: { email } });
     if (!user) {
-      return res.status(404).json({ message: "Compte introuvable." });
+      // ⚠️ Ne pas révéler si l'email existe (sécurité)
+      return res.status(200).json({ 
+        message: "Si cet email existe, un code a été envoyé.",
+        expiresIn: "15 minutes"
+      });
     }
 
     // 2. Générer code 4 chiffres
     const resetCode = Math.floor(1000 + Math.random() * 9000).toString();
     console.log("🔑 Code généré:", resetCode);
 
-    // 3. Sauvegarder dans la DB (AVEC BIGINT maintenant !)
+    // 3. Sauvegarder dans la DB
     user.reset_code = resetCode;
     user.reset_code_expiry = Date.now() + 15 * 60 * 1000; // 15 minutes
     user.reset_code_attempts = 0;
     await user.save();
     console.log("💾 Code sauvegardé en DB");
 
-    // 4. ✅ RÉPONDRE IMMÉDIATEMENT au frontend (AVANT d'envoyer l'email)
+    // 4. ✅ RÉPONDRE IMMÉDIATEMENT (avant envoi email)
     res.status(200).json({ 
       message: "Code envoyé par email ✅",
       expiresIn: "15 minutes"
     });
 
-    // 5. ⏳ Envoyer l'email EN ARRIÈRE-PLAN (après la réponse)
+    // 5. ⏳ Envoyer l'email EN ARRIÈRE-PLAN
     console.log("📤 Envoi email en arrière-plan...");
     
-    // Utiliser setTimeout pour ne PAS bloquer la réponse
-    setTimeout(async () => {
+    // setImmediate pour exécution async sans bloquer
+    setImmediate(async () => {
       try {
         await sendPasswordResetEmail(email, resetCode);
-        console.log(`✅ Email envoyé avec succès à ${email} (arrière-plan)`);
+        console.log(`✅ Email envoyé avec succès à ${email}`);
       } catch (emailError) {
         console.error("❌ Erreur envoi email (arrière-plan):", emailError.message);
         
-        // Option: Logger l'erreur dans une table pour suivi
-        // await LogError.create({ email, error: emailError.message, type: 'reset_email' });
+        // ⚠️ Option: Logger dans une table d'erreurs pour monitoring
+        // await ErrorLog.create({ 
+        //   email, 
+        //   error: emailError.message, 
+        //   type: 'reset_email',
+        //   timestamp: new Date()
+        // });
       }
-    }, 0);
+    });
 
   } catch (error) {
     console.error("❌ Erreur forgotPassword:", error);
     
-    // Vérifier si la réponse n'a pas déjà été envoyée
+    // Vérifier que la réponse n'a pas déjà été envoyée
     if (!res.headersSent) {
       res.status(500).json({ message: "Erreur serveur." });
     }
@@ -282,10 +291,33 @@ export const verifyResetCode = async (req, res) => {
 
     if (!user) {
       console.log("❌ Code invalide ou expiré");
+      
+      // ✅ Incrémenter les tentatives (protection anti-brute force)
+      const userWithEmail = await User.findOne({ where: { email } });
+      if (userWithEmail && userWithEmail.reset_code_attempts !== null) {
+        userWithEmail.reset_code_attempts += 1;
+        await userWithEmail.save();
+        
+        // Bloquer après 5 tentatives
+        if (userWithEmail.reset_code_attempts >= 5) {
+          userWithEmail.reset_code = null;
+          userWithEmail.reset_code_expiry = null;
+          await userWithEmail.save();
+          return res.status(429).json({ 
+            message: "Trop de tentatives. Demandez un nouveau code." 
+          });
+        }
+      }
+      
       return res.status(400).json({ message: "Code invalide ou expiré." });
     }
 
     console.log("✅ Code valide");
+    
+    // Réinitialiser les tentatives
+    user.reset_code_attempts = 0;
+    await user.save();
+    
     res.json({ 
       message: "Code vérifié ✅",
       valid: true 
@@ -306,11 +338,15 @@ export const resetPassword = async (req, res) => {
     console.log("🔄 Reset password pour:", email);
     
     if (!email || !code || !password) {
-      return res.status(400).json({ message: "Email, code et mot de passe requis." });
+      return res.status(400).json({ 
+        message: "Email, code et mot de passe requis." 
+      });
     }
 
     if (password.length < 6) {
-      return res.status(400).json({ message: "Le mot de passe doit contenir au moins 6 caractères." });
+      return res.status(400).json({ 
+        message: "Le mot de passe doit contenir au moins 6 caractères." 
+      });
     }
 
     const user = await User.findOne({
@@ -322,7 +358,9 @@ export const resetPassword = async (req, res) => {
     });
 
     if (!user) {
-      return res.status(400).json({ message: "Code invalide ou expiré." });
+      return res.status(400).json({ 
+        message: "Code invalide ou expiré." 
+      });
     }
 
     // Hasher le nouveau mot de passe

@@ -197,28 +197,34 @@ export const updateAvatar = async (req, res) => {
   }
 };
 
+import crypto from "crypto";
+import bcrypt from "bcrypt";
+import { Op } from "sequelize";
+import User from "../models/User.js";
+import { sendPasswordResetEmail } from "../utils/emailService.js";
+
 /* ===============================
-   🔐 FORGOT PASSWORD
+   🔐 FORGOT PASSWORD (envoi code)
 ================================ */
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
-    if (!email)
-      return res.status(400).json({ message: "Email requis." });
+    if (!email) return res.status(400).json({ message: "Email requis." });
 
     const user = await User.findOne({ where: { email } });
-    if (!user)
-      return res.status(404).json({ message: "Compte introuvable." });
+    if (!user) return res.status(404).json({ message: "Compte introuvable." });
 
-    const resetToken = crypto.randomBytes(32).toString("hex");
+    // Générer code 4 chiffres
+    const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
 
-    user.reset_token = resetToken;
-    user.reset_token_expiry = Date.now() + 3600000;
+    user.reset_code = otpCode;
+    user.reset_code_expiry = Date.now() + 10 * 60 * 1000; // 10 min
+    user.reset_code_attempts = 0;
     await user.save();
 
-    await sendPasswordResetEmail(email, resetToken);
+    await sendPasswordResetEmail(email, otpCode);
 
-    res.json({ message: "Email de réinitialisation envoyé ✅" });
+    res.json({ message: "Code de réinitialisation envoyé ✅" });
   } catch (error) {
     console.error("ForgotPassword error:", error);
     res.status(500).json({ message: "Erreur serveur." });
@@ -226,36 +232,37 @@ export const forgotPassword = async (req, res) => {
 };
 
 /* ===============================
-   🔄 RESET PASSWORD
+   🔄 RESET PASSWORD WITH CODE
 ================================ */
-export const resetPassword = async (req, res) => {
+export const resetPasswordWithCode = async (req, res) => {
   try {
-    const { token } = req.params;
-    const { password } = req.body;
+    const { email, code, password } = req.body;
 
     if (!password || password.length < 6)
-      return res.status(400).json({
-        message: "Mot de passe trop court.",
-      });
+      return res.status(400).json({ message: "Mot de passe trop court." });
 
-    const user = await User.findOne({
-      where: {
-        reset_token: token,
-        reset_token_expiry: { [Op.gt]: Date.now() },
-      },
-    });
-
+    const user = await User.findOne({ where: { email } });
     if (!user)
-      return res.status(400).json({ message: "Token invalide." });
+      return res.status(400).json({ message: "Code invalide ou utilisateur introuvable." });
+
+    if (user.reset_code_attempts >= 5)
+      return res.status(400).json({ message: "Trop de tentatives." });
+
+    if (user.reset_code !== code || user.reset_code_expiry < Date.now()) {
+      user.reset_code_attempts += 1;
+      await user.save();
+      return res.status(400).json({ message: "Code invalide ou expiré." });
+    }
 
     user.password = await bcrypt.hash(password, 10);
-    user.reset_token = null;
-    user.reset_token_expiry = null;
+    user.reset_code = null;
+    user.reset_code_expiry = null;
+    user.reset_code_attempts = null;
     await user.save();
 
     res.json({ message: "Mot de passe réinitialisé ✅" });
   } catch (error) {
-    console.error("ResetPassword error:", error);
+    console.error("ResetPasswordWithCode error:", error);
     res.status(500).json({ message: "Erreur serveur." });
   }
 };

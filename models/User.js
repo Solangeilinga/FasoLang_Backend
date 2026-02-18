@@ -33,14 +33,12 @@ const User = sequelize.define("users", {
         type: DataTypes.STRING(255),
         allowNull: false,
     },
-    reset_token: {
+    reset_code: {
   type: DataTypes.STRING(255),
   allowNull: true,
 },
-reset_token_expiry: {
-  type: DataTypes.DATE,
-  allowNull: true,
-},
+reset_code_expiry: { type: DataTypes.BIGINT, allowNull: true },
+  reset_code_attempts: { type: DataTypes.INTEGER, defaultValue: 0 },
 
     role: {
         type: DataTypes.ENUM("admin", "user"),

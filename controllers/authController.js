@@ -218,7 +218,7 @@ export const forgotPassword = async (req, res) => {
     user.reset_token_expiry = Date.now() + 15 * 60 * 1000; // code valide 15 min
     await user.save();
 
-    await sendPasswordResetCode(email, resetCode);
+    await endPasswordResetEmail(email, resetCode);
 
     res.json({ message: "Code envoyé par email ✅" });
   } catch (error) {

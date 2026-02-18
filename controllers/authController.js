@@ -211,16 +211,25 @@ export const forgotPassword = async (req, res) => {
     const user = await User.findOne({ where: { email } });
     if (!user) return res.status(404).json({ message: "Compte introuvable." });
 
-    // Générer code 4 chiffres
+    // ✅ Générer code 4 chiffres
     const resetCode = Math.floor(1000 + Math.random() * 9000).toString();
-
-    user.reset_token = resetCode;
-    user.reset_token_expiry = Date.now() + 15 * 60 * 1000; // code valide 15 min
+    
+    // ✅ Utiliser les BONS noms de colonnes de ton modèle
+    user.reset_code = resetCode;                    // reset_code au lieu de reset_token
+    user.reset_code_expiry = Date.now() + 15 * 60 * 1000; // 15 min
+    user.reset_code_attempts = 0;                   // Réinitialiser les tentatives
     await user.save();
 
-    await endPasswordResetEmail(email, resetCode);
+    console.log(`🔑 Code généré pour ${email}: ${resetCode}`);
 
-    res.json({ message: "Code envoyé par email ✅" });
+    // ✅ Envoyer l'email avec le code
+    await sendPasswordResetEmail(email, resetCode);
+
+    res.json({ 
+      message: "Code envoyé par email ✅",
+      expiresIn: "15 minutes" 
+    });
+    
   } catch (error) {
     console.error("ForgotPassword error:", error);
     res.status(500).json({ message: "Erreur serveur." });
@@ -235,17 +244,24 @@ export const verifyResetCode = async (req, res) => {
     const { email, code } = req.body;
     if (!email || !code) return res.status(400).json({ message: "Email et code requis." });
 
+    // ✅ Utiliser les BONS noms de colonnes
     const user = await User.findOne({
       where: {
         email,
-        reset_token: code,
-        reset_token_expiry: { [Op.gt]: Date.now() },
+        reset_code: code,                          // reset_code au lieu de reset_token
+        reset_code_expiry: { [Op.gt]: Date.now() }, // Pas expiré
       },
     });
 
-    if (!user) return res.status(400).json({ message: "Code invalide ou expiré." });
+    if (!user) {
+      return res.status(400).json({ message: "Code invalide ou expiré." });
+    }
 
-    res.json({ message: "Code vérifié ✅" });
+    res.json({ 
+      message: "Code vérifié ✅",
+      valid: true 
+    });
+    
   } catch (error) {
     console.error("VerifyResetCode error:", error);
     res.status(500).json({ message: "Erreur serveur." });
@@ -258,28 +274,41 @@ export const verifyResetCode = async (req, res) => {
 export const resetPassword = async (req, res) => {
   try {
     const { email, code, password } = req.body;
-    if (!email || !code || !password)
+    
+    if (!email || !code || !password) {
       return res.status(400).json({ message: "Email, code et mot de passe requis." });
+    }
 
-    if (password.length < 6)
-      return res.status(400).json({ message: "Mot de passe trop court." });
+    if (password.length < 6) {
+      return res.status(400).json({ message: "Le mot de passe doit contenir au moins 6 caractères." });
+    }
 
+    // ✅ Vérifier le code avec les bons noms de colonnes
     const user = await User.findOne({
       where: {
         email,
-        reset_token: code,
-        reset_token_expiry: { [Op.gt]: Date.now() },
+        reset_code: code,
+        reset_code_expiry: { [Op.gt]: Date.now() },
       },
     });
 
-    if (!user) return res.status(400).json({ message: "Code invalide ou expiré." });
+    if (!user) {
+      return res.status(400).json({ message: "Code invalide ou expiré." });
+    }
 
-    user.password = await bcrypt.hash(password, 10);
-    user.reset_token = null;
-    user.reset_token_expiry = null;
+    // ✅ Hasher le nouveau mot de passe
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // ✅ Mettre à jour l'utilisateur
+    user.password = hashedPassword;
+    user.reset_code = null;           // Effacer le code
+    user.reset_code_expiry = null;
+    user.reset_code_attempts = 0;
     await user.save();
 
-    res.json({ message: "Mot de passe réinitialisé ✅" });
+    res.json({ message: "Mot de passe réinitialisé avec succès ✅" });
+    
   } catch (error) {
     console.error("ResetPassword error:", error);
     res.status(500).json({ message: "Erreur serveur." });

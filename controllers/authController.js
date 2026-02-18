@@ -6,6 +6,7 @@ import User from "../models/User.js";
 import { sendPasswordResetEmail } from "../utils/emailService.js";
 import { generateToken } from "../utils/jwt.js";
 
+
 dotenv.config();
 
 /* ===============================
@@ -198,8 +199,9 @@ export const updateAvatar = async (req, res) => {
 };
 
 
+
 /* ===============================
-   🔐 FORGOT PASSWORD (envoi code)
+   🔐 ENVOYER CODE 4 CHIFFRES
 ================================ */
 export const forgotPassword = async (req, res) => {
   try {
@@ -210,16 +212,15 @@ export const forgotPassword = async (req, res) => {
     if (!user) return res.status(404).json({ message: "Compte introuvable." });
 
     // Générer code 4 chiffres
-    const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
+    const resetCode = Math.floor(1000 + Math.random() * 9000).toString();
 
-    user.reset_code = otpCode;
-    user.reset_code_expiry = Date.now() + 10 * 60 * 1000; // 10 min
-    user.reset_code_attempts = 0;
+    user.reset_token = resetCode;
+    user.reset_token_expiry = Date.now() + 15 * 60 * 1000; // code valide 15 min
     await user.save();
 
-    await sendPasswordResetEmail(email, otpCode);
+    await sendPasswordResetCode(email, resetCode);
 
-    res.json({ message: "Code de réinitialisation envoyé ✅" });
+    res.json({ message: "Code envoyé par email ✅" });
   } catch (error) {
     console.error("ForgotPassword error:", error);
     res.status(500).json({ message: "Erreur serveur." });
@@ -227,37 +228,60 @@ export const forgotPassword = async (req, res) => {
 };
 
 /* ===============================
-   🔄 RESET PASSWORD WITH CODE
+   🔍 VERIFIER CODE
 ================================ */
-export const resetPasswordWithCode = async (req, res) => {
+export const verifyResetCode = async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    if (!email || !code) return res.status(400).json({ message: "Email et code requis." });
+
+    const user = await User.findOne({
+      where: {
+        email,
+        reset_token: code,
+        reset_token_expiry: { [Op.gt]: Date.now() },
+      },
+    });
+
+    if (!user) return res.status(400).json({ message: "Code invalide ou expiré." });
+
+    res.json({ message: "Code vérifié ✅" });
+  } catch (error) {
+    console.error("VerifyResetCode error:", error);
+    res.status(500).json({ message: "Erreur serveur." });
+  }
+};
+
+/* ===============================
+   🔄 REINITIALISER MOT DE PASSE
+================================ */
+export const resetPassword = async (req, res) => {
   try {
     const { email, code, password } = req.body;
+    if (!email || !code || !password)
+      return res.status(400).json({ message: "Email, code et mot de passe requis." });
 
-    if (!password || password.length < 6)
+    if (password.length < 6)
       return res.status(400).json({ message: "Mot de passe trop court." });
 
-    const user = await User.findOne({ where: { email } });
-    if (!user)
-      return res.status(400).json({ message: "Code invalide ou utilisateur introuvable." });
+    const user = await User.findOne({
+      where: {
+        email,
+        reset_token: code,
+        reset_token_expiry: { [Op.gt]: Date.now() },
+      },
+    });
 
-    if (user.reset_code_attempts >= 5)
-      return res.status(400).json({ message: "Trop de tentatives." });
-
-    if (user.reset_code !== code || user.reset_code_expiry < Date.now()) {
-      user.reset_code_attempts += 1;
-      await user.save();
-      return res.status(400).json({ message: "Code invalide ou expiré." });
-    }
+    if (!user) return res.status(400).json({ message: "Code invalide ou expiré." });
 
     user.password = await bcrypt.hash(password, 10);
-    user.reset_code = null;
-    user.reset_code_expiry = null;
-    user.reset_code_attempts = null;
+    user.reset_token = null;
+    user.reset_token_expiry = null;
     await user.save();
 
     res.json({ message: "Mot de passe réinitialisé ✅" });
   } catch (error) {
-    console.error("ResetPasswordWithCode error:", error);
+    console.error("ResetPassword error:", error);
     res.status(500).json({ message: "Erreur serveur." });
   }
 };

@@ -5,8 +5,8 @@ import {
     // logout,
     // me,
     forgotPassword,
-    resetPassword,
-    // verifyResetToken,
+  verifyResetCode,
+  resetPassword,
     getProfile,
     updateProfile,
     updateAvatar
@@ -37,14 +37,11 @@ router.post("/login", login);
    🔹 MOT DE PASSE
 =============================== */
 
-// Demande de réinitialisation
-router.post("/forgot-password", forgotPassword);
 
-// Réinitialisation du mot de passe
+router.post("/forgot-password", forgotPassword);
+router.post("/verify-reset-code", verifyResetCode);
 router.post("/reset-password", resetPassword);
 
-// // Vérifier la validité du token de réinitialisation
-// router.get("/verify-reset-token", verifyResetToken);
 
 /* ===============================
    🔹 PROFIL UTILISATEUR

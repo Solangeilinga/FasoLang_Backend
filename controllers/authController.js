@@ -197,11 +197,6 @@ export const updateAvatar = async (req, res) => {
   }
 };
 
-import crypto from "crypto";
-import bcrypt from "bcrypt";
-import { Op } from "sequelize";
-import User from "../models/User.js";
-import { sendPasswordResetEmail } from "../utils/emailService.js";
 
 /* ===============================
    🔐 FORGOT PASSWORD (envoi code)

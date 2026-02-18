@@ -199,16 +199,6 @@ export const updateAvatar = async (req, res) => {
 };
 
 
-
-/* ===============================
-   🔐 ENVOYER CODE 4 CHIFFRES
-================================ */
-// controllers/authController.js
-import User from "../models/User.js";
-import bcrypt from "bcrypt";
-import { sendPasswordResetEmail } from "../services/emailService.js";
-import { Op } from "sequelize";
-
 /* ===============================
    🔐 ENVOYER CODE 4 CHIFFRES
 ================================ */

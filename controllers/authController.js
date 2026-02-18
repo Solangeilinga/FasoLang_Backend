@@ -203,36 +203,70 @@ export const updateAvatar = async (req, res) => {
 /* ===============================
    🔐 ENVOYER CODE 4 CHIFFRES
 ================================ */
+// controllers/authController.js
+import User from "../models/User.js";
+import bcrypt from "bcrypt";
+import { sendPasswordResetEmail } from "../services/emailService.js";
+import { Op } from "sequelize";
+
+/* ===============================
+   🔐 ENVOYER CODE 4 CHIFFRES
+================================ */
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
-    if (!email) return res.status(400).json({ message: "Email requis." });
+    console.log("📧 forgotPassword reçu pour:", email);
+    
+    if (!email) {
+      return res.status(400).json({ message: "Email requis." });
+    }
 
+    // 1. Vérifier utilisateur
     const user = await User.findOne({ where: { email } });
-    if (!user) return res.status(404).json({ message: "Compte introuvable." });
+    if (!user) {
+      return res.status(404).json({ message: "Compte introuvable." });
+    }
 
-    // ✅ Générer code 4 chiffres
+    // 2. Générer code 4 chiffres
     const resetCode = Math.floor(1000 + Math.random() * 9000).toString();
-    
-    // ✅ Utiliser les BONS noms de colonnes de ton modèle
-    user.reset_code = resetCode;                    // reset_code au lieu de reset_token
-    user.reset_code_expiry = Date.now() + 15 * 60 * 1000; // 15 min
-    user.reset_code_attempts = 0;                   // Réinitialiser les tentatives
+    console.log("🔑 Code généré:", resetCode);
+
+    // 3. Sauvegarder dans la DB (AVEC BIGINT maintenant !)
+    user.reset_code = resetCode;
+    user.reset_code_expiry = Date.now() + 15 * 60 * 1000; // 15 minutes
+    user.reset_code_attempts = 0;
     await user.save();
+    console.log("💾 Code sauvegardé en DB");
 
-    console.log(`🔑 Code généré pour ${email}: ${resetCode}`);
-
-    // ✅ Envoyer l'email avec le code
-    await sendPasswordResetEmail(email, resetCode);
-
-    res.json({ 
+    // 4. ✅ RÉPONDRE IMMÉDIATEMENT au frontend (AVANT d'envoyer l'email)
+    res.status(200).json({ 
       message: "Code envoyé par email ✅",
-      expiresIn: "15 minutes" 
+      expiresIn: "15 minutes"
     });
+
+    // 5. ⏳ Envoyer l'email EN ARRIÈRE-PLAN (après la réponse)
+    console.log("📤 Envoi email en arrière-plan...");
     
+    // Utiliser setTimeout pour ne PAS bloquer la réponse
+    setTimeout(async () => {
+      try {
+        await sendPasswordResetEmail(email, resetCode);
+        console.log(`✅ Email envoyé avec succès à ${email} (arrière-plan)`);
+      } catch (emailError) {
+        console.error("❌ Erreur envoi email (arrière-plan):", emailError.message);
+        
+        // Option: Logger l'erreur dans une table pour suivi
+        // await LogError.create({ email, error: emailError.message, type: 'reset_email' });
+      }
+    }, 0);
+
   } catch (error) {
-    console.error("ForgotPassword error:", error);
-    res.status(500).json({ message: "Erreur serveur." });
+    console.error("❌ Erreur forgotPassword:", error);
+    
+    // Vérifier si la réponse n'a pas déjà été envoyée
+    if (!res.headersSent) {
+      res.status(500).json({ message: "Erreur serveur." });
+    }
   }
 };
 
@@ -242,28 +276,33 @@ export const forgotPassword = async (req, res) => {
 export const verifyResetCode = async (req, res) => {
   try {
     const { email, code } = req.body;
-    if (!email || !code) return res.status(400).json({ message: "Email et code requis." });
+    console.log("🔍 Vérification code pour:", email);
+    
+    if (!email || !code) {
+      return res.status(400).json({ message: "Email et code requis." });
+    }
 
-    // ✅ Utiliser les BONS noms de colonnes
     const user = await User.findOne({
       where: {
         email,
-        reset_code: code,                          // reset_code au lieu de reset_token
-        reset_code_expiry: { [Op.gt]: Date.now() }, // Pas expiré
+        reset_code: code,
+        reset_code_expiry: { [Op.gt]: Date.now() },
       },
     });
 
     if (!user) {
+      console.log("❌ Code invalide ou expiré");
       return res.status(400).json({ message: "Code invalide ou expiré." });
     }
 
+    console.log("✅ Code valide");
     res.json({ 
       message: "Code vérifié ✅",
       valid: true 
     });
     
   } catch (error) {
-    console.error("VerifyResetCode error:", error);
+    console.error("❌ verifyResetCode error:", error);
     res.status(500).json({ message: "Erreur serveur." });
   }
 };
@@ -274,6 +313,7 @@ export const verifyResetCode = async (req, res) => {
 export const resetPassword = async (req, res) => {
   try {
     const { email, code, password } = req.body;
+    console.log("🔄 Reset password pour:", email);
     
     if (!email || !code || !password) {
       return res.status(400).json({ message: "Email, code et mot de passe requis." });
@@ -283,7 +323,6 @@ export const resetPassword = async (req, res) => {
       return res.status(400).json({ message: "Le mot de passe doit contenir au moins 6 caractères." });
     }
 
-    // ✅ Vérifier le code avec les bons noms de colonnes
     const user = await User.findOne({
       where: {
         email,
@@ -296,21 +335,22 @@ export const resetPassword = async (req, res) => {
       return res.status(400).json({ message: "Code invalide ou expiré." });
     }
 
-    // ✅ Hasher le nouveau mot de passe
+    // Hasher le nouveau mot de passe
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // ✅ Mettre à jour l'utilisateur
+    // Mettre à jour l'utilisateur
     user.password = hashedPassword;
-    user.reset_code = null;           // Effacer le code
+    user.reset_code = null;
     user.reset_code_expiry = null;
     user.reset_code_attempts = 0;
     await user.save();
 
+    console.log("✅ Mot de passe réinitialisé pour:", email);
     res.json({ message: "Mot de passe réinitialisé avec succès ✅" });
     
   } catch (error) {
-    console.error("ResetPassword error:", error);
+    console.error("❌ resetPassword error:", error);
     res.status(500).json({ message: "Erreur serveur." });
   }
 };

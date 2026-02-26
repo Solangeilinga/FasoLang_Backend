@@ -16,6 +16,7 @@ import proverbeRoutes from "./routes/proverbeRoutes.js";
 import languageRoutes from "./routes/languageRoutes.js";
 import lessonsRoutes from "./routes/lessonRoutes.js";
 import progressRoutes from "./routes/progressRoutes.js";
+import adminRoutes from './routes/adminRoutes.js';
 
 // Import des modèles pour initialiser les associations
 import {
@@ -64,6 +65,8 @@ app.use("/api/languages", languageRoutes);
 app.use("/api/rankings", rankingsRoutes);
 app.use("/api/lessons", lessonsRoutes);
 app.use("/api/progress", progressRoutes);
+app.use('/api/admin', adminRoutes);
+
 
 // --- Lancement du serveur ---
 const PORT = process.env.PORT || 5000;

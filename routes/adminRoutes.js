@@ -1,5 +1,5 @@
 import express from 'express';
-import { authMiddleware, adminMiddleware } from '../middleware/authMiddleware.js';
+import { adminMiddleware, authenticateToken } from '../middleware/authMiddleware.js';
 
 // Import controllers
 import * as adminUserCtrl from '../controllers/adminUserController.js';
@@ -11,7 +11,7 @@ import * as adminStatsCtrl from '../controllers/adminStatsController.js';
 const router = express.Router();
 
 // ✅ Appliquer les middlewares à TOUTES les routes admin
-router.use(authMiddleware);  // Doit être connecté
+router.use(authenticateToken);  // Doit être connecté
 router.use(adminMiddleware); // Doit être admin
 
 // ============= USERS =============

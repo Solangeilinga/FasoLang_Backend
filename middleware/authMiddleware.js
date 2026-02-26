@@ -4,6 +4,9 @@ dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
+// ===============================
+// ✅ AUTHENTICATE TOKEN (existant)
+// ===============================
 export const authenticateToken = (req, res, next) => {
     try {
         let token;
@@ -49,4 +52,46 @@ export const authenticateToken = (req, res, next) => {
             message: "Erreur serveur" 
         });
     }
+};
+
+// ===============================
+// 🛡️ ADMIN MIDDLEWARE (nouveau)
+// ===============================
+export const adminMiddleware = (req, res, next) => {
+    try {
+        // Vérifier que l'utilisateur est authentifié
+        if (!req.user) {
+            console.log("❌ Utilisateur non authentifié (pas de req.user)");
+            return res.status(401).json({
+                success: false,
+                message: "Non autorisé - Utilisateur non authentifié",
+            });
+        }
+
+        // Vérifier que l'utilisateur est admin
+        if (req.user.role !== 'admin') {
+            console.log(`❌ Accès refusé - Role: ${req.user.role} (requis: admin)`);
+            return res.status(403).json({
+                success: false,
+                message: "Accès refusé - Droits administrateur requis",
+            });
+        }
+
+        console.log(`✅ Admin vérifié: ${req.user.email || req.user.id}`);
+        next();
+    } catch (error) {
+        console.error("❌ Erreur adminMiddleware:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Erreur serveur",
+        });
+    }
+};
+
+// ===============================
+// 📤 Exports
+// ===============================
+export default {
+    authenticateToken,
+    adminMiddleware,
 };

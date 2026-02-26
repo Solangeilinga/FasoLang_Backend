@@ -39,4 +39,4 @@ const ProverbeContent = sequelize.define("proverbe_contents", {
   ],
 });
 
-export default ProverbeContent
+export default ProverbeContent;

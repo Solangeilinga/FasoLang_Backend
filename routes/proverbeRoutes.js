@@ -6,8 +6,6 @@ const router = express.Router();
 
 // 📚 Routes pour les proverbes
 
-router.get("/:proverbeId", getProverbeById);
-
 router.get("/", getProverbes);
 router.get("/themes", getThemes);
 router.get("/:proverbeId", getProverbeById);

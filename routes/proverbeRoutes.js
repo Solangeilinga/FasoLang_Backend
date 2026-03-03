@@ -9,8 +9,9 @@ const router = express.Router();
 router.get("/:proverbeId", getProverbeById);
 
 router.get("/", getProverbes);
-router.get("/:proverbeId", getProverbeById);
 router.get("/themes", getThemes);
+router.get("/:proverbeId", getProverbeById);
+
 
 
 export default router;

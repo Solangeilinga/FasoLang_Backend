@@ -72,11 +72,11 @@ app.use('/api/admin', adminRoutes);
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, "0.0.0.0", async () => {
-    console.log(`✅ Serveur en ligne sur le port ${PORT}`);
+    console.log(`Serveur en ligne sur le port ${PORT}`);
     try {
         // Tester la connexion
         await sequelize.authenticate();
-        console.log("✅ Connexion à la base de données établie");
+        console.log("Connexion à la base de données établie");
 
         // Synchroniser avec désactivation temporaire des contraintes FK
         await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
@@ -87,9 +87,9 @@ app.listen(PORT, "0.0.0.0", async () => {
         
         await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
         
-        console.log("✅ Base de données synchronisée");
+        console.log("Base de données synchronisée");
         
     } catch (error) {
-        console.error("❌ Erreur de connexion à la base de données :", error);
+        console.error("Erreur de connexion à la base de données :", error);
     }
 });

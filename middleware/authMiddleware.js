@@ -15,18 +15,18 @@ export const authenticateToken = (req, res, next) => {
         const authHeader = req.headers.authorization;
         if (authHeader && authHeader.startsWith('Bearer ')) {
             token = authHeader.split(' ')[1];
-            console.log("🎫 Token trouvé dans le header");
+            console.log("Token trouvé dans le header");
         }
         
         // 2. Si pas de header, essayer les cookies (pour le web)
         if (!token && req.cookies?.token) {
             token = req.cookies.token;
-            console.log("🍪 Token trouvé dans les cookies");
+            console.log("Token trouvé dans les cookies");
         }
 
         // 3. Si toujours pas de token, retourner 401
         if (!token) {
-            console.log("❌ Aucun token trouvé");
+            console.log("Aucun token trouvé");
             return res.status(401).json({ 
                 message: "Token manquant" 
             });
@@ -35,19 +35,19 @@ export const authenticateToken = (req, res, next) => {
         // 4. Vérifier le token
         jwt.verify(token, JWT_SECRET, (err, user) => {
             if (err) {
-                console.error("❌ Token invalide:", err.message);
+                console.error("Token invalide:", err.message);
                 return res.status(403).json({ 
                     message: "Token invalide ou expiré" 
                 });
             }
             
-            console.log("✅ Utilisateur authentifié:", user.id);
+            console.log("Utilisateur authentifié:", user.id);
             req.user = user;
             next();
         });
         
     } catch (error) {
-        console.error("❌ Erreur serveur:", error);
+        console.error("Erreur serveur:", error);
         return res.status(500).json({ 
             message: "Erreur serveur" 
         });

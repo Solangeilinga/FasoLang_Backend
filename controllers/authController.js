@@ -59,7 +59,7 @@ export const register = async (req, res) => {
     const token = generateToken(newUser);
 
     res.status(201).json({
-      message: "Inscription réussie ✅",
+      message: "Inscription réussie",
       user: {
         id: newUser.id,
         firstname,
@@ -102,7 +102,7 @@ export const login = async (req, res) => {
     const token = generateToken(user);
 
     res.json({
-      message: "Connexion réussie ✅",
+      message: "Connexion réussie",
       user: {
         id: user.id,
         firstname: user.firstname,

@@ -64,7 +64,7 @@ LessonContent.belongsTo(Language, {
 // ===============================
 Course.hasMany(Exercise, {
   foreignKey: "courseId",
-  as: "courseExercises",  // ✅ Changé de "exercises" à "courseExercises"
+  as: "courseExercises",
 });
 Exercise.belongsTo(Course, {
   foreignKey: "courseId",
@@ -76,7 +76,7 @@ Exercise.belongsTo(Course, {
 // ===============================
 Lesson.hasMany(Exercise, {
   foreignKey: "lessonId",
-  as: "exercises",  // ✅ Alias unique pour Lesson
+  as: "exercises",
 });
 Exercise.belongsTo(Lesson, {
   foreignKey: "lessonId",
@@ -114,7 +114,7 @@ UserProgress.belongsTo(Lesson, {
 });
 
 // ===============================
-// 🔹 User ↔ Exercise ↔ Course
+// 🔹 User ↔ Exercise ↔ Course ↔ Language
 // ===============================
 User.hasMany(UserExercise, {
   foreignKey: "userId",
@@ -141,6 +141,16 @@ Course.hasMany(UserExercise, {
 UserExercise.belongsTo(Course, {
   foreignKey: "courseId",
   as: "course",
+});
+
+// AJOUT : Lien direct pour les hooks de UserExercise
+Language.hasMany(UserExercise, {
+  foreignKey: "languageId",
+  as: "userLanguageExercises",
+});
+UserExercise.belongsTo(Language, {
+  foreignKey: "languageId",
+  as: "language",
 });
 
 // ===============================

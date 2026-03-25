@@ -22,7 +22,7 @@ const LessonContent = sequelize.define("lesson_contents", {
     type: DataTypes.INTEGER,
     allowNull: false,
     references: {
-      model: "langages",
+      model: "languages",
       key: "id",
     },
     onDelete: "CASCADE",
@@ -38,7 +38,7 @@ const LessonContent = sequelize.define("lesson_contents", {
   },
   imageUrl: {
     type: DataTypes.STRING,
-    allowNull: true, // 👈 pas obligatoire
+    allowNull: true, //  pas obligatoire
   },
 }, {
   tableName: "lesson_contents",

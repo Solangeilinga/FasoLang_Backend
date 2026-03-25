@@ -76,20 +76,19 @@ app.listen(PORT, "0.0.0.0", async () => {
     try {
         // Tester la connexion
         await sequelize.authenticate();
-        console.log("Connexion à la base de données établie");
+        console.log("✅ Connexion à la base de données PostgreSQL établie");
 
-        // Synchroniser avec désactivation temporaire des contraintes FK
-        await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
+        // --- SYNCHRONISATION POSTGRESQL ---
+        // Pour PostgreSQL, on ne peut pas utiliser SET FOREIGN_KEY_CHECKS.
+        // Sequelize gère les relations automatiquement lors du sync.
         
-        // // Force: true pour recréer les tables (à utiliser seulement en développement)
-        // // ⚠️ ATTENTION: Ceci supprime toutes les données à chaque redémarrage
-        //await sequelize.sync({ force: true });
+        // 💡 CONSEIL : Utilisez { force: true } UNE SEULE FOIS pour créer vos nouvelles tables 
+        // sur Supabase, puis remettez-le à 'false' ou commentez-le.
+        await sequelize.sync({ force: false }); 
         
-        await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
-        
-        console.log("Base de données synchronisée");
+        console.log("✅ Base de données synchronisée avec succès");
         
     } catch (error) {
-        console.error("Erreur de connexion à la base de données :", error);
+        console.error("❌ Erreur de connexion ou de synchronisation :", error);
     }
 });

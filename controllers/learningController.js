@@ -143,140 +143,25 @@ const validateAnswer = (exercise, answer) => {
 
 // ===============================
 // 📝 submitExercise
-// ===============================// ===============================
-// 📝 submitExercise - VERSION AMÉLIORÉE UX
-// ===============================
 export const submitExercise = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { exerciseId, courseId, answer, lessonId } = req.body;
+    const { exerciseId, courseId, languageId, answer, is_correct, points } = req.body;
 
-    if (!exerciseId || !courseId || answer === undefined) {
-      return res.status(400).json({
-        success: false,
-        error: "exerciseId, courseId et answer sont requis",
-      });
-    }
-
-    const exercise = await Exercise.findByPk(exerciseId);
-    if (!exercise) {
-      return res.status(404).json({ 
-        success: false, 
-        error: "Exercice non trouvé" 
-      });
-    }
-
-    console.log('📊 EXERCISE DATA:', {
-      id: exercise.id,
-      type: exercise.type,
-      correct_answer_type: typeof exercise.correct_answer,
-      correct_answer_value: exercise.correct_answer,
-      user_answer_type: typeof answer,
-      user_answer_value: answer
-    });
-
-    if (!exercise.type || !exercise.correct_answer) {
-      console.error('❌ Exercice incomplet:', exercise);
-      return res.status(400).json({ 
-        success: false,
-        error: 'Exercice mal configuré dans la base de données'
-      });
-    }
-
-    let finalLessonId = lessonId || exercise.lessonId;
-    
-    if (!finalLessonId) {
-      console.warn(`⚠️ Exercice ${exerciseId} n'a pas de lessonId, tentative de déduction...`);
-      if (exerciseId >= 19 && exerciseId <= 23) {
-        finalLessonId = 25;
-      } else {
-        finalLessonId = 1;
-      }
-      console.log(`✅ LessonId déduit: ${finalLessonId} pour l'exercice ${exerciseId}`);
-    }
-
-    let is_correct = false;
-    try {
-      const result = validateAnswer(exercise, answer);
-      is_correct = result.is_correct;
-    } catch (err) {
-      console.error('❌ Validation error:', err);
-      return res.status(400).json({ 
-        success: false, 
-        error: err.message 
-      });
-    }
-
-    const previousAttempts = await UserExercise.count({ 
-      where: { userId, exerciseId } 
-    });
-    const isFirstTry = previousAttempts === 0;
-
-    const xpEarned = is_correct ? XPService.calculateExerciseXP(true, isFirstTry) : 0;
-
-    await UserExercise.create({
+    // Le Hook 'afterCreate' dans le modèle s'occupera du reste (XP + Ranking)
+    const result = await UserExercise.create({
       userId,
       exerciseId,
       courseId,
-      lessonId: finalLessonId,
+      languageId, // Passé ici pour le classement automatique
       answer: JSON.stringify(answer),
       is_correct,
-      point_earned: xpEarned,
-      attempt_number: previousAttempts + 1,
-      answered_at: new Date(),
+      point_earned: is_correct ? points : 0
     });
 
-    let streak = 0;
-    let streakBonus = 0;
-    if (is_correct) {
-      try {
-        const streakData = await XPService.updateDailyStreak(userId);
-        streak = streakData?.streak || 0;
-        streakBonus = XPService.calculateStreakBonus(streak, xpEarned);
-      } catch (e) {
-        console.warn("⚠️ Streak ignoré:", e.message);
-      }
-    }
-
-    const totalXP = xpEarned + streakBonus;
-    if (is_correct) {
-      const course = await Course.findByPk(courseId);
-      if (course) {
-        await XPService.addXPToUser(userId, course.languageId, totalXP);
-      }
-    }
-
-    // ✅ NOUVEAU : Calculer la progression de la leçon
-    const lessonProgress = await calculateLessonProgressInfo(userId, finalLessonId);
-
-    return res.json({
-      success: true,
-      data: {
-        is_correct,
-        xpEarned: is_correct ? totalXP : 0,
-        streak,
-        isFirstTry,
-        lessonId: finalLessonId,
-        
-        // ✅ Informations de progression
-        lessonProgress: {
-          totalExercises: lessonProgress.totalExercises,
-          completedExercises: lessonProgress.completedExercises,
-          remainingExercises: lessonProgress.remainingExercises,
-          canComplete: lessonProgress.canComplete,
-          completionPercentage: lessonProgress.completionPercentage
-        },
-        
-        message: is_correct ? `Bravo 🎉 +${totalXP} XP` : "Réessaie 💪",
-      },
-    });
+    res.json({ success: true, data: result });
   } catch (error) {
-    console.error("❌ submitExercise:", error);
-    res.status(500).json({ 
-      success: false, 
-      error: "Erreur serveur",
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 };
 

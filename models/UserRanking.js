@@ -22,7 +22,7 @@ const UserRanking = sequelize.define("user_rankings", {
   type: DataTypes.INTEGER,
   allowNull: false,
   references: {
-    model: "langages",
+    model: "languages",
     key: "id",
   },
   onDelete: "CASCADE",

@@ -221,7 +221,7 @@ export class XPService {
     return xpNeeded;
   }
 
-  // ✅ Mettre à jour les classements
+  // ✅ Mettre à jour les classements — sans N+1 queries
   static async updateRankings(languageId) {
     try {
       const rankings = await UserRanking.findAll({
@@ -229,10 +229,12 @@ export class XPService {
         order: [['total_score', 'DESC']]
       });
 
-      for (let i = 0; i < rankings.length; i++) {
-        rankings[i].rank_position = i + 1;
-        await rankings[i].save();
-      }
+      // ✅ Mise à jour en parallèle avec Promise.all au lieu de boucle séquentielle
+      await Promise.all(
+        rankings.map((ranking, index) =>
+          ranking.update({ rank_position: index + 1 }, { silent: true })
+        )
+      );
 
       return rankings;
 

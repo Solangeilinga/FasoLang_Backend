@@ -54,54 +54,34 @@ const addCourseToHistory = async (userId, courseId, finalXP) => {
 const validateLessonExercises = async (userId, lessonId) => {
   assertId(lessonId, "lessonId");
 
-  console.log('🔍 Validation exercices pour:', { userId, lessonId });
-
-  // Récupérer tous les exercices de la leçon
-  const exercises = await Exercise.findAll({ 
-    where: { lessonId } 
-  });
-
-  console.log(`📊 Total exercices trouvés: ${exercises.length}`);
+  // ✅ Requêtes parallèles pour éviter le N+1
+  const [exercises, completedExercises] = await Promise.all([
+    Exercise.findAll({ where: { lessonId } }),
+    UserExercise.findAll({
+      where: { userId, lessonId, is_correct: true },
+      attributes: ['exerciseId'],
+      group: ['exerciseId']
+    })
+  ]);
 
   if (!exercises.length) {
-    return { 
-      valid: true, 
-      totalExercises: 0, 
-      completedExercises: 0, 
+    return {
+      valid: true,
+      totalExercises: 0,
+      completedExercises: 0,
       remainingExercises: 0,
       message: "Aucun exercice pour cette leçon",
-      score: 0, 
-      xp: 0 
+      score: 0,
+      xp: 0
     };
   }
 
-  // Récupérer les exercices réussis par l'utilisateur
-  const completedExercises = await UserExercise.findAll({
-    where: {
-      userId,
-      lessonId,
-      is_correct: true
-    },
-    attributes: ['exerciseId'],
-    group: ['exerciseId']
-  });
-
-  const completedExerciseIds = new Set(
-    completedExercises.map(ue => ue.exerciseId)
-  );
-
+  const completedExerciseIds = new Set(completedExercises.map(ue => ue.exerciseId));
   const totalExercises = exercises.length;
   const completedCount = completedExerciseIds.size;
   const remainingCount = totalExercises - completedCount;
 
-  console.log(`✅ Exercices réussis: ${completedCount}/${totalExercises}`);
-
-  // Calculer l'XP total
-  let totalXP = 0;
-  for (const ex of exercises) {
-    totalXP += ex.xp || 10;
-  }
-
+  const totalXP = exercises.reduce((sum, ex) => sum + (ex.xp || 10), 0);
   const valid = completedCount === totalExercises;
 
   return {
@@ -109,7 +89,7 @@ const validateLessonExercises = async (userId, lessonId) => {
     totalExercises,
     completedExercises: completedCount,
     remainingExercises: remainingCount,
-    message: valid 
+    message: valid
       ? `Tous les exercices sont réussis (${completedCount}/${totalExercises})`
       : `Il reste ${remainingCount} exercice(s) à réussir`,
     completed: valid,
@@ -696,13 +676,16 @@ export const updateLessonProgress = async (req, res) => {
       courseProgress.course_completion_percentage === 100 && 
       courseProgress.completed_at;
 
+    // ✅ Récupérer le streak une seule fois (évite le double incrément)
+    const finalStreakData = await XPService.updateDailyStreak(userId);
+
     res.json({
       success: true,
       data: {
         xpEarned,
         streakBonus,
         totalXP: xpEarned + streakBonus,
-        dailyStreak: (await XPService.updateDailyStreak(userId)).streak,
+        dailyStreak: finalStreakData.streak,
         completed,
         lessonProgress: {
           completed: progress.lesson_completed,

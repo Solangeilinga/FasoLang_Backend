@@ -53,7 +53,7 @@ export const register = async (req, res) => {
       email,
       numero,
       password: hashedPassword,
-      role: role || "user",
+      role: "user", // ✅ Sécurité : on ignore req.body.role, toujours "user"
     });
 
     const token = generateToken(newUser);
@@ -159,9 +159,10 @@ export const updateProfile = async (req, res) => {
     if (!user)
       return res.status(404).json({ message: "Utilisateur introuvable." });
 
-    user.firstname ??= firstname;
-    user.lastname ??= lastname;
-    user.numero ??= numero;
+    // ✅ Correction : mettre à jour seulement les champs fournis (??= faisait l'inverse)
+    if (firstname) user.firstname = firstname;
+    if (lastname)  user.lastname  = lastname;
+    if (numero)    user.numero    = numero;
 
     await user.save();
 

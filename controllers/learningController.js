@@ -64,18 +64,7 @@ const validateAnswer = (exercise, answer) => {
         }
       }
 
-      // 🐛 DEBUG TEMPORAIRE
-      console.log('🔍 TRADUCTION DEBUG:', {
-        type: exercise.type,
-        user_answer_raw: answer,
-        user_answer_normalized: user,
-        correct_answer_raw: exercise.correct_answer,
-        correct_answer_normalized: correct,
-        match: user === correct,
-        user_length: user.length,
-        correct_length: correct.length
-      });
-      
+      // ✅ Suppression du log DEBUG de traduction (trop verbeux en prod)
       return { is_correct: user === correct };
     }
 
@@ -114,23 +103,6 @@ const validateAnswer = (exercise, answer) => {
       const allMatch = sameKeys && correctKeys.every(
         key => correctObj[key] === userObj[key]
       );
-      
-      // 🐛 DEBUG
-      console.log('🔍 ASSOCIATION DEBUG:', {
-        correctObj,
-        userObj,
-        correctKeys,
-        userKeys,
-        sameKeys,
-        allMatch,
-        // Détail des comparaisons
-        comparisons: correctKeys.map(key => ({
-          key,
-          correct: correctObj[key],
-          user: userObj[key],
-          match: correctObj[key] === userObj[key]
-        }))
-      });
       
       return { is_correct: allMatch };
     }

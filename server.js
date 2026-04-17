@@ -17,6 +17,7 @@ import languageRoutes from "./routes/languageRoutes.js";
 import lessonsRoutes from "./routes/lessonRoutes.js";
 import progressRoutes from "./routes/progressRoutes.js";
 import adminRoutes from './routes/adminRoutes.js';
+import botRoutes from './routes/bot.js';
 
 // Import des modèles pour initialiser les associations
 import {
@@ -24,8 +25,10 @@ import {
   Language,
   Course,
   Lesson,
+  LessonContent,
   Exercise,
   Proverbe,
+  ProverbeContent,
   UserExercise,
   UserProgress,
   UserRanking,
@@ -34,14 +37,26 @@ import {
 
 dotenv.config();
 
+// ✅ Vérification des variables d'environnement critiques
+const REQUIRED_ENV = ['JWT_SECRET', 'DATABASE_URL'];
+const missingEnv = REQUIRED_ENV.filter(key => !process.env[key]);
+if (missingEnv.length > 0) {
+  console.error(`❌ Variables d'environnement manquantes : ${missingEnv.join(', ')}`);
+  process.exit(1);
+}
+
 const app = express();
-// Vérifier la configuration Cloudinary au démarrage
+
 verifyCloudinaryConfig();
 
-// --- Middlewares globaux ---
+// ✅ CORS sécurisé : whitelist via variable d'environnement
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+  : true; // true = toutes origines (dev uniquement)
+
 app.use(cors({
-    origin: true,      // accepte toutes les origines
-    credentials: true,
+  origin: allowedOrigins,
+  credentials: true,
 }));
 
 app.use(express.json());
@@ -49,46 +64,46 @@ app.use(cookieParser());
 
 // --- Test de route racine ---
 app.get("/", (req, res) => {
-    res.send("🌍 API Langues du Faso — Backend opérationnel !");
+  res.send("🌍 API Langues du Faso — Backend opérationnel !");
 });
-
 
 app.use("/api/upload", uploadRoutes);
 
 // --- Routes principales ---
 app.use("/api/courses", coursesRoutes);
 app.use("/api/proverbes", proverbeRoutes);
-app.use("/api/auth", authRoutes);        // Authentification & gestion des sessions
-app.use("/api/users", userRoutes);       // Gestion du profil et préférences
-app.use("/api/exercises", exerciseRoutes); // Exercices et évaluations    
+app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/exercises", exerciseRoutes);
 app.use("/api/languages", languageRoutes);
 app.use("/api/rankings", rankingsRoutes);
 app.use("/api/lessons", lessonsRoutes);
 app.use("/api/progress", progressRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/bot', botRoutes);
 
+// ✅ Middleware de gestion d'erreurs globales (doit être en dernier)
+app.use((err, req, res, next) => {
+  console.error("❌ Erreur non gérée :", err.stack);
+  res.status(500).json({
+    success: false,
+    message: process.env.NODE_ENV === 'production'
+      ? "Erreur serveur interne"
+      : err.message
+  });
+});
 
 // --- Lancement du serveur ---
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, "0.0.0.0", async () => {
-    console.log(`Serveur en ligne sur le port ${PORT}`);
-    try {
-        // Tester la connexion
-        await sequelize.authenticate();
-        console.log("✅ Connexion à la base de données PostgreSQL établie");
-
-        // --- SYNCHRONISATION POSTGRESQL ---
-        // Pour PostgreSQL, on ne peut pas utiliser SET FOREIGN_KEY_CHECKS.
-        // Sequelize gère les relations automatiquement lors du sync.
-        
-        // 💡 CONSEIL : Utilisez { force: true } UNE SEULE FOIS pour créer vos nouvelles tables 
-        // sur Supabase, puis remettez-le à 'false' ou commentez-le.
-        await sequelize.sync({ force: false }); 
-        
-        console.log("✅ Base de données synchronisée avec succès");
-        
-    } catch (error) {
-        console.error("❌ Erreur de connexion ou de synchronisation :", error);
-    }
+  console.log(`🚀 Serveur en ligne sur le port ${PORT}`);
+  try {
+    await sequelize.authenticate();
+    console.log("✅ Connexion à la base de données établie");
+    await sequelize.sync({ force: false });
+    console.log("✅ Base de données synchronisée avec succès");
+  } catch (error) {
+    console.error("❌ Erreur de connexion ou de synchronisation :", error);
+  }
 });

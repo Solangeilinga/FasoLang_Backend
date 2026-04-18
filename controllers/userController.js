@@ -13,6 +13,24 @@ import Language from "../models/Language.js";
 import CourseHistory from "../models/CourseHistory.js";
 import { XPService } from "../utils/xpService.js";
 
+// ✅ Colonnes sûres de Language (sans imageUrl qui peut ne pas encore exister en DB)
+// Une fois le sync alter:true exécuté, imageUrl sera disponible
+const LANGUAGE_ATTRS_SAFE = ["id", "name"];
+const LANGUAGE_ATTRS_FULL = ["id", "name", "imageUrl"];
+
+// Helper : tente avec imageUrl, retombe sur colonnes de base si la colonne manque
+async function safeFindAllWithLanguage(queryFn) {
+  try {
+    return await queryFn(LANGUAGE_ATTRS_FULL);
+  } catch (err) {
+    // Colonne imageUrl manquante en base → requête sans imageUrl
+    if (err?.parent?.code === "42703" && err?.parent?.message?.includes("imageUrl")) {
+      return await queryFn(LANGUAGE_ATTRS_SAFE);
+    }
+    throw err;
+  }
+}
+
 /* =====================================================
    📊 GET /api/users/dashboard
 ===================================================== */
@@ -20,26 +38,8 @@ export const getDashboard = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const [
-      user,
-      courseProgress,
-      lessonProgress,
-      completedHistory,
-      userRankings
-    ] = await Promise.all([
-      User.findByPk(userId, {
-        attributes: [
-          "id",
-          "firstname",
-          "lastname",
-          "email",
-          "avatarUrl",
-          "dailyStreak",
-          "lastActivity"
-        ]
-      }),
-
-      // Progression globale des cours
+    // ✅ courseProgress avec fallback sur imageUrl manquante
+    const courseProgress = await safeFindAllWithLanguage((langAttrs) =>
       UserProgress.findAll({
         where: { userId, lessonId: null },
         include: [
@@ -48,17 +48,31 @@ export const getDashboard = async (req, res) => {
             as: "course",
             attributes: ["id", "title", "level"],
             include: [
-              {
-                model: Language,
-                as: "language",
-                attributes: ["id", "name", "imageUrl"]
-              }
+              { model: Language, as: "language", attributes: langAttrs }
             ]
           }
         ]
+      })
+    );
+
+    // ✅ userRankings avec fallback
+    const userRankings = await safeFindAllWithLanguage((langAttrs) =>
+      UserRanking.findAll({
+        where: { userId },
+        include: [
+          { model: Language, as: "language", attributes: langAttrs }
+        ]
+      })
+    );
+
+    const [user, lessonProgress, completedHistory] = await Promise.all([
+      User.findByPk(userId, {
+        attributes: [
+          "id", "firstname", "lastname", "email",
+          "avatarUrl", "dailyStreak", "lastActivity"
+        ]
       }),
 
-      // Progression par leçon
       UserProgress.findAll({
         where: { userId, lessonId: { [Op.ne]: null } },
         include: [
@@ -67,7 +81,6 @@ export const getDashboard = async (req, res) => {
         ]
       }),
 
-      // Historique des cours terminés
       CourseHistory.findAll({
         where: { userId },
         include: [
@@ -76,20 +89,12 @@ export const getDashboard = async (req, res) => {
             as: "course",
             attributes: ["id", "title", "level"],
             include: [
-              { model: Language, as: "language", attributes: ["id", "name"] }
+              { model: Language, as: "language", attributes: LANGUAGE_ATTRS_SAFE }
             ]
           }
         ],
         order: [["completed_at", "DESC"]],
         limit: 5
-      }),
-
-      // Classements
-      UserRanking.findAll({
-        where: { userId },
-        include: [
-          { model: Language, as: "language", attributes: ["id", "name", "imageUrl"] }
-        ]
       })
     ]);
 

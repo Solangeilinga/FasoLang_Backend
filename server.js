@@ -101,7 +101,8 @@ app.listen(PORT, "0.0.0.0", async () => {
   try {
     await sequelize.authenticate();
     console.log("✅ Connexion à la base de données établie");
-    await sequelize.sync({ force: false });
+    // ✅ alter:true ajoute les colonnes manquantes sans supprimer les données
+    await sequelize.sync({ alter: true });
     console.log("✅ Base de données synchronisée avec succès");
   } catch (error) {
     console.error("❌ Erreur de connexion ou de synchronisation :", error);

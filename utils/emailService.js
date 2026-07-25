@@ -10,7 +10,9 @@ if (!SENDGRID_API_KEY || !EMAIL_FROM) {
   console.warn("⚠️ Variables SendGrid non configurées");
 }
 
-sgMail.setApiKey(SENDGRID_API_KEY);
+if (SENDGRID_API_KEY) {
+  sgMail.setApiKey(SENDGRID_API_KEY);
+}
 
 export const sendPasswordResetEmail = async (email, resetCode) => {
   try {

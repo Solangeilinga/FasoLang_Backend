@@ -1,9 +1,7 @@
 import bcrypt from "bcrypt";
-import crypto from "crypto";
 import dotenv from "dotenv";
 import { Op } from "sequelize";
 import User from "../models/User.js";
-import { sendPasswordResetEmail } from "../utils/emailService.js";
 import { generateToken } from "../utils/jwt.js";
 
 
@@ -91,13 +89,19 @@ export const login = async (req, res) => {
 
     email = email.toLowerCase().trim();
 
+    if (!User || typeof User.findOne !== 'function') {
+      return res.status(503).json({ message: "Service d'authentification indisponible pour le moment." });
+    }
+
     const user = await User.findOne({ where: { email } });
-    if (!user)
+    if (!user) {
       return res.status(404).json({ message: "Utilisateur non trouvé." });
+    }
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch)
+    if (!isMatch) {
       return res.status(401).json({ message: "Mot de passe incorrect." });
+    }
 
     const token = generateToken(user);
 
